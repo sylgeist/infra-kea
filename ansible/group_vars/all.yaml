@@ -1,0 +1,8 @@
+---
+vault_ca: "{{ playbook_dir ~ '/CA.pem' }}"
+vault_url: https://vault:8200
+vault_role_id: "{{ lookup('env', 'VAULT_ROLE_ID') }}"
+vault_secret_id: "{{ lookup('env', 'VAULT_SECRET_ID') }}"
+ca_file: /usr/local/share/ca-certificates/CA.pem
+kea_db: kea_db
+kea_db_user: kea_db

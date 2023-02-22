@@ -1,0 +1,43 @@
+---
+platform: linux
+
+image_resource:
+  type: registry-image
+  source:
+    repository: docker.internal/concourse/alpine
+    tag: latest
+
+inputs:
+  - name: code
+
+outputs:
+  - name: git_meta
+
+run:
+  path: bash
+  args:
+    - -ec
+    - |
+      export RUN_DIR="${PWD}"
+
+      cd code
+
+      export GIT_COMMIT="$(git log --pretty="format:%h" -1)"
+      export GIT_REF=`git rev-parse HEAD`
+
+      if [ -f ".git/resource/url" ]; then
+          export GIT_BRANCH="$(cat .git/resource/head_name)"
+          export GIT_SHORT_REF="$(cat .git/resource/head_short_sha)"
+          export GIT_COMMITTER="$(cat .git/resource/author)"
+          export GIT_COMMIT_MESSAGE="$(cat .git/resource/message)"
+          export GIT_PR_URL="$(cat .git/resource/url)"
+          export GIT_PR_ID="$(cat .git/resource/pr)"
+          export PR_TEXT="PR <${GIT_PR_URL}|${GIT_PR_ID}>"
+      else
+        export GIT_BRANCH=`git describe --contains --all HEAD | cut -f1 -d~`
+        export GIT_SHORT_REF=`git rev-parse --short HEAD`
+        export GIT_COMMITTER=`git log --format="%an" -1`
+        export GIT_COMMIT_MESSAGE=`git log --format="%s" -1`
+      fi
+
+      echo "<https://github/platform/netboot-images/inbound/commit/${GIT_COMMIT}|${GIT_COMMIT}> $(git log --pretty="format: ${GIT_BRANCH} by %an ${PR_TEXT}" -1)" > $RUN_DIR/git_meta/log

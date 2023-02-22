@@ -1,0 +1,19 @@
+---
+platform: linux
+
+image_resource:
+  type: registry-image
+  source:
+    repository: dockerhub-mirror/concourse/oci-build-task
+
+params:
+  CONTEXT: code/docker/kea-db-exporter
+
+inputs:
+  - name: code
+
+outputs:
+  - name: image
+
+run:
+  path: build

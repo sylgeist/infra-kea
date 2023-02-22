@@ -1,0 +1,6 @@
+kea_stork_db: stork
+kea_stork_db_user: stork
+kea_stork_db_host: kea-db
+kea_stork_rest_cert: /usr/local/share/tls/stork.crt
+kea_stork_rest_key: /usr/local/share/tls/stork.key
+tls_params_path: /usr/local/share/tls/params.json

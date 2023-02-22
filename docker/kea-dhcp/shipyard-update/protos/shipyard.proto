@@ -1,0 +1,1757 @@
+syntax = "proto3";
+
+package shipyardapi;
+option go_package = "pkg/protobuf";
+
+import "google/protobuf/timestamp.proto";
+
+// Note: This file is vendored manually into cthulhu/.
+// ('go mod vendor' does not pull it in automatically)
+import "auth.proto";
+import "annotations.proto";
+
+service ShipyardAPI {
+  option (dorpc.log_rpc_requests) = true;
+
+  // AddFriendlySKU adds a new friendly SKU for a detailed SKU.
+  rpc AddFriendlySKU(AddFriendlySKURequest) returns (AddFriendlySKUResponse) {
+    option (dorpc.auth.modes) = { okta: true, mtls: true };
+  }
+
+  // DeleteFriendlySKU deletes a friendly SKU from the system.
+  rpc DeleteFriendlySKU(DeleteFriendlySKURequest) returns (DeleteFriendlySKUResponse) {
+    option (dorpc.auth.modes) = { okta: true, mtls: true };
+  }
+
+  // AddComponentSKU adds a new component SKU.
+  rpc AddComponentSKU(AddComponentSKURequest) returns (AddComponentSKUResponse) {
+    option (dorpc.auth.modes) = { okta: true, mtls: true };
+  }
+
+  // DeleteComponentSKU deletes a component SKU from the system.
+  rpc DeleteComponentSKU(DeleteComponentSKURequest) returns (DeleteComponentSKUResponse) {
+    option (dorpc.auth.modes) = { okta: true, mtls: true };
+  }
+
+  // AddComponentSKU adds a new component SKU.
+  rpc SetExpectedSKU(SetExpectedSKURequest) returns (SetExpectedSKUResponse) {
+    option (dorpc.auth.modes) = { okta: true, mtls: true };
+  }
+
+  // GetHostDetails returns a summary of details for one or more machines.
+  rpc GetHostDetails(HostDetailsRequest) returns (HostDetailsResponse) {
+    option deprecated = true; // Use Search instead
+  }
+
+  // GetRack returns a list of machines in a given rack.
+  // This service is deprecated. Please search instead using the Site: and Name: fields.
+  rpc GetRack(RackID) returns (Rack) {
+    option deprecated = true; // Use Search instead
+  }
+
+  // GetBMC gets BMC data for the specified system serial.
+  rpc GetBMC(GetBMCRequest) returns (BMC) {}
+
+  // OverrideBMC will override BMC data with the specified data.
+  rpc OverrideBMC(OverrideBMCRequest) returns (OverrideBMCResponse) {
+    option (dorpc.auth.modes) = { okta: true, mtls: true };
+  }
+
+  // ListBMC will list BMCs for a list of serials.
+  rpc ListBMC(ListBMCRequest) returns (ListBMCResponse) {}
+
+  // ListAllBMC will list all available BMC data.
+  rpc ListAllBMC(ListAllBMCRequest) returns (ListBMCResponse) {}
+
+  // BMCDiscovery will discover the IP address for a server's BMC.
+  rpc BMCDiscovery(BMCDiscoveryRequest) returns (BMCDiscoveryResponse) {
+    option (dorpc.auth.modes) = { okta: true, mtls: true };
+   }
+
+  // FindMissingBMCHosts will list all BMCs that haven't reported into Shipyard.
+  rpc FindMissingBMCHosts(FindMissingBMCHostsRequest) returns (FindMissingBMCHostsResponse) {}
+
+  // FindBMCHosts will list all BMCs that have reported into Shipyard.
+  rpc FindBMCHosts(FindBMCHostsRequest) returns (FindBMCHostsResponse) {}
+
+  // Search the Shipyard database for machines that match a search query. All the information
+  // for matching machines is returned in the result.
+  // The full search query syntax is documented on Confluence at:
+  // https://confluence/display/IAAS/Shipyard+Search
+  rpc Search(SearchQuery) returns (SearchResult) {}
+
+  // SearchCSV searches the shipyard database for machines that match a search term,
+  // and returns the results as a string of CSV data.
+  // The full search query syntax is documented on Confluence at:
+  // https://confluence/display/IAAS/Shipyard+Search
+  rpc CSVSearch(SearchQuery) returns (CSVSearchResult) {}
+}
+
+// SearchQuery is a message to run either a Search or CSVSearch.
+message SearchQuery {
+  // The search query to run. The full syntax is documented on Confluence at:
+  // https://confluence/display/IAAS/Shipyard+Search
+  string term = 1;
+
+  // For CSVSearches, the fields to include in the results.
+  repeated string fields = 2;
+}
+
+// SearchResult is the message returned by a regular Search.
+message SearchResult {
+
+  // Full details for all the machines that matched the search query.
+  repeated Host machines = 1;
+
+  // racks are not returned from search results.
+  reserved 2;
+  reserved "racks";
+
+  // The search term is echoed back, to support clients managing
+  // multiple results.
+  string term = 3;
+}
+
+// CSVSearchResult includes all machines that matched the search,
+// in CSV format, including only the fields that were specified
+// in the SearchQuery.
+message CSVSearchResult {
+  // The search term is echoed back, to support clients managing
+  // multiple results.
+  string term = 1;
+
+  // All the CSV data as a string, that includes line breaks.
+  string csvData = 2;
+}
+
+// MachineKey is the unique identifier for a machine. It is used
+// throughout the requests and responses for the API.
+message MachineKey {
+  // uuid and bmc_mac removed in favor of system_serial
+  reserved 1, 2;
+  reserved "uuid", "bmc_mac";
+
+  // The system serial from IPMI. Used to uniquely identify
+  // a machine throughout Shipyard.
+  //
+  // Search field: System.MachineKey.SystemSerial
+  string system_serial = 3;
+}
+
+// Change log entries are added programmatically or through the API.
+// They are stored in the changelog table of the shipyard schema.
+message ChangeLogEntry {
+  // The free form message in the log entry. This can be up to 8kb.
+  //
+  // Search field: ChangeLog.Message
+  string message = 1;
+
+  // An optional uri included with the log entry. Up to 2083 characters.
+  // These are only uris by convention, and could contain other text.
+  //
+  // Search field: ChangeLog.URI
+  string uri = 2;
+
+  // When the log entry was added to Shipyard.
+  //
+  // Search field: ChangeLog.Timestamp
+  google.protobuf.Timestamp timestamp = 3;
+}
+
+// A request to add the given entry to the given machine.
+message ChangeLogRequest {
+  // Key identifying the machine to add the entry to.
+  MachineKey machine_key = 1;
+
+  // Entry to add to the machine.
+  ChangeLogEntry change_log_entry = 2;
+}
+
+// A request to add the given mapping to a detailed SKU for a new friendly SKU.
+message AddFriendlySKURequest {
+  // The new friendly SKU.
+  string friendly_sku = 1;
+
+  // The detailed SKU to associate with the new friendly SKU.
+  string detailed_sku = 2;
+}
+
+message AddFriendlySKUResponse {}
+
+// A request to delete the mapping between a friendly SKU and a detailed SKU.
+message DeleteFriendlySKURequest {
+  // The friendly or detailed SKU to delete.
+  string sku = 1;
+}
+
+message DeleteFriendlySKUResponse {}
+
+// A request to add the specified component SKU.
+message AddComponentSKURequest {
+  // The component ID. (Currently either "M", "P", "R", "N", "H", "S", or "G".)
+  string component = 1;
+
+  // Hexadecimal SKU index string. Must be a hexadecimal string greater than or
+  // equal to 000 and less than or equal to FFE. (The FFF indexes are reserved.)
+  string index = 2;
+
+  // Description. Required for machine (M), processor (P), and storage (S) components.
+  string description = 3;
+
+  // Capacity in gigabytes. Required for RAM (R) and storage (S) components.
+  int32 capacity_gb = 4;
+
+  // PCI device. Required for NIC (N) and HBA (H) components.
+  PCIDevice pci_device = 5;
+
+  // If true, will automatically choose the SKU next index by adding one to the
+  // highest index for the component.
+  bool autoselect_next_index = 6;
+
+  // Quantity of the component required for a SKU match. (Only supported by
+  // a subset of component SKU types.)
+  int32 quantity = 7;
+}
+
+// A request to set the expected friendly SKU for the specified serial number(s).
+message SetExpectedSKURequest {
+  // The new friendly SKU.
+  repeated string system_serials = 1;
+
+  // The new friendly SKU for the specified serial(s).
+  string expected_friendly_sku = 2;
+}
+
+message SetExpectedSKUResponse {}
+
+message PCIDevice {
+  // PCI vendor ID. Four-digit hexadecimal string.
+  string vendor_id = 1;
+
+  // PCI model ID. Four-digit hexadecimal string.
+  string model_id = 2;
+
+  // Subsystem vendor ID. Four-digit hexadecimal string.
+  string subsystem_vendor_id = 3;
+
+  // Subsystem model ID. Four-digit hexadecimal string.
+  string subsystem_model_id = 4;
+
+  // Display name for this PCI device.
+  string model_name = 5;
+}
+
+message AddComponentSKUResponse {}
+
+// A request to delete a component SKU.
+message DeleteComponentSKURequest {
+  // The component ID. (Currently either "M", "P", "R", "N", "H", or "S".)
+  string component = 1;
+
+  // Hexadecimal SKU index string. If empty, will automatically choose the
+  // next index by adding one to the highest index for the component.
+  string index = 2;
+}
+
+message DeleteComponentSKUResponse {
+  // The number of component SKUs that were deleted.
+  // If this value is negative, an unknown number of SKUs were deleted.
+  int64 deleted_count = 1;
+}
+
+// A response with one or more machines.
+message HostDetailsResponse {
+  // The machines that matched the request.
+  repeated Host hosts = 1;
+}
+
+// Hosts or Machines are the main piece of data tracked in Shipyard.
+// A Host message will include all the data available about a machine
+// unless specifically noted on a field here.
+//
+// Search fields are not prepended with anything.
+message Host {
+  // The hostname of the machine. May or may not be a FQDN.
+  //
+  // Search field: Hostname
+  string hostname = 1;
+
+  // A sub-message containing information from the system and platform tables.
+  System system = 2;
+
+  // A sub-message containing information about the kernel.
+  Kernel kernel = 3;
+
+  // A sub-message containing SMART information about the machine's drives.
+  SmartDrives smartdrives = 4;
+
+  // field lldp (5) removed for field network_info (16)
+  reserved 5;
+  reserved "lldp";
+
+  // A sub-message containing information about any Linux md devices configured
+  // on the machine.
+  MD md = 6;
+
+  // A sub-message containing information about hardware RAID arrays configured
+  // on the machine. This information is gathered using vendor CLI tools and
+  // in-house OSQuery extensions.
+  MegaSas mega_sas = 7;
+
+  // A sub-message containing the most recent chef success, and chef failure.
+  ChefReports chef_reports = 8;
+
+  // The vm_count field has been removed.
+  reserved 9;
+  reserved "vm_count";
+
+  // field addresses (10) deprecated for field network_info (16)
+  reserved 10;
+  reserved "addresses";
+
+  // A sub-message with information about the IPMI controller in the machine.
+  // Also known as BMC, iDRAC, iLO.
+  IPMIManagementController ipmi_management_controller = 11;
+
+  // A sub-message with information about the Serial and PDU port on the machine.
+  Ports ports = 12;
+
+  // A list of the change logs that have been added to the machine.
+  repeated ChangeLogEntry change_log_entries = 13;
+
+  // A sub-message with information about the rack containing the machine.
+  RackID rack = 14;
+
+  // A sub-message with information about the RAM sticks in the machine.
+  MemoryDevices memory_devices = 15;
+
+  // A sub-message containing sub-messages with information about the machine's
+  // network connections.
+  NetworkInfo network_info = 16;
+
+  // A sub-message with the unique key for the machine. Currently system_serial.
+  MachineKey machine_key = 17;
+
+  // This field has been replaced by the 'sku' field and MachineSKU message.
+  reserved 18;
+  reserved "friendly_sku";
+
+  // The role of the machine, as determined from chef roles. One of: hv, storage,
+  // nas, or unknown.
+  //
+  // Search field: this is not searchable.
+  string role = 19;
+
+  reserved 20;
+  reserved "maintenance_mode";
+
+  // field l1tf_status (21) no longer in use
+  reserved 21;
+  reserved "l1tf_status";
+
+  // A list of sub-messages with information about RAID and HBA controllers that sit
+  // between the system and the drives.
+  repeated StorageDevice hba_storage_devices = 22;
+
+  // A sub-message containing the SKU of the machine.
+  MachineSKU sku = 23;
+
+  // The network L2 zone, within the data center, that the machine is connected to.
+  int32 l2_zone= 24;
+
+  // A sub-message with information about the power supplies in a machine.
+  PowerSupplies power_supplies = 26;
+
+  // Droplet count fields have been removed.
+  reserved 27;
+  reserved "droplet_counts";
+
+  // A list of sub-messages with information about NVMe devices on a machine's PCI bus.
+  repeated NvmeDevice nvme_devices = 28;
+}
+
+// NetworkInfo ties together all the information about a machine's
+// network presence.
+message NetworkInfo {
+  // A sub-message with the network interfaces configured on the machine.
+  InterfaceDetails interface_details = 1;
+
+  // A list of the network addresses on non-"tap" interfaces on the machine.
+  repeated Address addresses = 2;
+
+  // A list of the LLDP neighbors on the machine.
+  repeated LLDP lldp = 3;
+}
+
+// Interface details has the list of network interfaces in the machine.
+message InterfaceDetails {
+  // The time when the interface details were sampled on the machine.
+  google.protobuf.Timestamp timestamp = 1;
+
+  // The list of network interfaces on the machine.
+  repeated NetworkInterface network_interfaces = 2;
+}
+
+/**
+ * The NetworkInterface message has information about the machine's network interfaces.
+ * The information comes from the interface_details table in the shipyard DB, and a join of the interface_details and pci_devices tables in osquery.
+ * The pci_class for these devices is filtered to "Network controller".
+ *
+ * Search fields are all prepended with "NetworkInterfaces".
+*/
+message NetworkInterface {
+  // The linux name of the interface, for example "eth0".
+  //
+  // Search field: NetworkInterfaces.Name
+  string name = 1;
+
+  // The MAC address of the interface. A string of lower-case hex digits separated
+  // by colons. For example, "3c:fd:fe:ab:bc:89".
+  //
+  // Search field: NetworkInterfaces.Mac
+  string mac = 2;
+
+  // The configured MTU of the interface in bytes.
+  //
+  // Search field: NetworkInterfaces.Mtu
+  uint32 mtu = 3;
+
+  // The speed of the interface in megabits per second (Mbps).
+  // For example, a 40g interface will have the value 40000.
+  //
+  // Search field: NetworkInterfaces.SpeedMbps
+  uint32 speed = 4;
+
+  // The PCI vendor id. Four lowercase hex digits.
+  //
+  // Search field: NetworkInterfaces.VendorID
+  string vendor_id = 5;
+
+  // The PCI vendor description. This is resolved by a lookup
+  // on individual machines that can very from machine to machine.
+  //
+  // Search field: NetworkInterfaces.Vendor
+  string vendor = 6;
+
+  // The PCI model id. Four lowercase hex digits.
+  //
+  // Search field: NetworkInterfaces.ModelID
+  string model_id = 7;
+
+  // The PCI model description. This is resolved by a lookup
+  // on individual machines that can very from machine to machine.
+  //
+  // Search field: NetworkInterfaces.Model
+  string model = 8;
+
+  // The subsystem PCI model id. Four lowercase hex digits.
+  // When white-labeled equipment is re-sold by an OEM, this
+  // field should be updated to identify the OEM.
+  //
+  // Search field: NetworkInterfaces.SubsystemVendorID
+  string subsystem_vendor_id = 9;
+
+  // The subsystem PCI vendor description. This is resolved by a lookup
+  // on individual machines that can very from machine to machine.
+  // When white-labeled equipment is re-sold by an OEM, this
+  // field should be updated to identify the OEM.
+  //
+  // Search field: NetworkInterfaces.SubsystemVendor
+  string subsystem_vendor = 10;
+
+  // The subsystem PCI model id. Four lowercase hex digits.
+  // When white-labeled equipment is re-sold by an OEM, this
+  // field should be updated to identify the OEM.
+  //
+  // Search field: NetworkInterfaces.SubsystemModelID
+  string subsystem_model_id = 11;
+
+  // The subsystem PCI model description. This is resolved by a lookup
+  // on individual machines that can very from machine to machine.
+  // When white-labeled equipment is re-sold by an OEM, this
+  // field should be updated to identify the OEM.
+  //
+  // Search field: NetworkInterfaces.SubsystemModel
+  string subsystem_model = 12;
+
+  // The PCI slot that the interface is in. For example, "0000:42:00.1".
+  string pci_slot = 13;
+}
+
+// MachineID is a short summary of a machine that is used to
+// represent machines within a Rack.
+//
+// We are aiming to remove this and just return full machines
+// in the Rack responses instead.
+//
+// This is not searchable.
+message MachineID {
+  // TODO: Remove this in favor of returning full machines in the Rack view.
+  option deprecated = true;
+
+  // The key for the machine.
+  MachineKey key = 1;
+
+  // The hostname of the machine.
+  string hostname = 2;
+
+  // The PDU port the machine is attached to.
+  string pdu_port = 3;
+
+  // The serial console server port the machine is attached to.
+  string serial_port = 4;
+
+  // The reported chassis version. This is useless on most of our machines.
+  string hardware_version = 5;
+
+  // The serial number of the machine. This is the system_serial and used
+  // as part of the MachineKey to uniquely identify the machine.
+  string machine_serial = 6;
+
+  // The model of the chassis. For example, "PowerEdge R620".
+  string model = 7;
+
+  // The version of the kernel the machine is running. For example, "4.9.77-1-generic".
+  string kernel = 8;
+
+  // The total of the all the installed RAM stick sizes, in gigabytes.
+  int64 memory_bytes = 9;
+
+  // The brand string of the CPU in the machine. For example, "Intel(R) Xeon(R) CPU E5-2630 0 @ 2.30GHz".
+  string cpu_brand = 10;
+
+  // The physical core count in the machine.
+  int64 cpu_cores = 11;
+}
+
+/**
+ * Information about the machine's IPMI Management Controller, aka BMC, aka iDRAC, aka iLO.
+ * The information comes from the ipmi_management_controller table in the shipyard DB, and a join of the ipmi_mc and ipmi_lan tables in osquery.
+ *
+ * Search fields are all prepended with "IPMI".
+*/
+message IPMIManagementController {
+  // The major number of the IPMI's software version.
+  //
+  // Search field: IPMI.FirmwareMajorVersion
+  int64 firmware_major_version = 1 [deprecated=true];
+
+  // The minor number of the IPMI's software version.
+  //
+  // Search field: IPMI.FirmwareMinorVersion
+  int64 firmware_minor_version = 2 [deprecated=true];
+
+  // The time when this info was gathered from the machine.
+  //
+  // Search field: IPMI.Timestamp
+  google.protobuf.Timestamp timestamp = 3;
+
+  // The MAC address of the IPMI controller. For example, "38:63:bb:3a:db:74".
+  //
+  // Search field: IPMI.MAC
+  string mac = 4;
+
+  // The IP address of the IPMI controller. For example, "10.216.96.159".
+  //
+  // Search field: IPMI.IP
+  string ip = 5;
+
+  // How the IP address was assigned. Can be either "DHCP Address" or "Static Address".
+  //
+  // Search field: IPMI.IPAddressSource
+  string ip_address_source = 6;
+
+  // The IP subnet mask of the IPMI controller. For example, "255.255.255.128".
+  //
+  // Search field: IPMI.SubnetMask
+  string subnet_mask = 7;
+
+  // The IP address of the gateway the IPMI controller is configured for. For example, "10.196.107.129".
+  //
+  // Search field: IPMI.GatewayIP
+  string gateway_ip = 8;
+
+  // The IPMI software version.
+  //
+  // Serach field: IPMI.FirmwareVersion
+  string firmware_version = 9;
+}
+
+/**
+ * Information about IP addresses configured on a machine.
+ * The information comes from the addresses table in the shipyard DB, and the interface_addresses table in osquery.
+ * Addresses are only included if the interface name begins with "br", "bond" or "eth" and the address looks like an IPv4 address.
+ *
+ * Search fields are all prepended with "Addresses".
+*/
+message Address {
+  // The IP address of this interface, for example "5.101.109.140".
+  //
+  // Search field: Addresses.Address
+  string address = 1;
+
+  // The broadcast address of the subnet this interface is on. For example "5.101.109.191".
+  //
+  // Search field: Addresses.Broadcast
+  string broadcast = 2;
+
+  // The linux interface name. For example "eth0", "eth1:mysqlvip", "br0", or "bond0.199"
+  //
+  // Search field: Addresses.InterfaceName
+  string interface_name = 3;
+
+  // The subnet mask of the subnet this interface is on. For example "255.255.255.248".
+  //
+  // Search field: Addresses.Mask
+  string mask = 4;
+
+  // The time when this address information was gathered from the machine.
+  //
+  // Search field: Addresses.Timestamp
+  google.protobuf.Timestamp timestamp = 5;
+}
+
+/**
+ * The System message has information about the overall machine.
+ * Most of the information, with noted exceptions, comes from the system table in the shipyard DB, and the system_info table in osquery.
+ *
+ * Search fields are all prepended with "System".
+*/
+message System {
+  // field machine_id (1) deprecated for field uuid (14)
+  reserved 1;
+  reserved "machine_id";
+
+  // The hostname of the machine.
+  //
+  // Search field: System.Hostname
+  string computer_name = 2;
+
+  // CPU brand string, contains vendor and model.
+  //
+  // Search field: System.CPUBrand
+  string cpu_brand = 3;
+
+  // Numeric CPU type.
+  // This field is no longer populated and not searchable.
+  string cpu_type = 4 [deprecated=true];
+
+  // Numeric CPU subtype.
+  // This field is no longer populated and not searchable.
+  string cpu_subtype = 5 [deprecated=true];
+
+  // The chassis model.
+  //
+  // Search field: System.HardwareModel
+  string hardware_model = 6;
+
+  // The system serial from IPMI. This is equivalent to the system serial
+  // that we use to uniquely identify machines in the fleet.
+  //
+  // Search field: System.HardwareSerial
+  string hardware_serial = 7;
+
+  // The chassis manufacturer.
+  //
+  // Search field: System.HardwareVendor
+  string hardware_vendor = 8;
+
+  // The version of the chassis from the manufacturer. This is mostly junk data,
+  // though occasionally a date like "20171212".
+  //
+  // Search field: System.HardwareVersion
+  string hardware_version = 9;
+
+  // Number of physical cores in hardware. Includes disabled cores.
+  //
+  // Search field: System.CPUPhysicalCores
+  uint32 cpu_physical_cores = 10;
+
+  // Number of logical cores in hardware. Includes disabled cores.
+  //
+  // Search field: System.CPULogicalCores
+  uint32 cpu_logical_cores = 11;
+
+  // Total of all the RAM stick sizes, in Gigabytes. This is different from the physical_memory
+  // in the shipyard.system table and osquery's system_info table. Those
+  // tables contain the total reported by the kernel, where this is the
+  // total of the manufacturer reported stick sizes.
+  //
+  // Search field: System.PhysicalMemoryGB
+  uint64 physical_memory_gb = 12;
+
+  // Time when this information was recorded on the machine.
+  //
+  // Search field: System.Timestamp
+  google.protobuf.Timestamp timestamp = 13;
+
+  // System UUID reported by the kernel. This can change across BIOS and kernel versions
+  // and is not a reliable identifier.
+  //
+  // Search field: System.UUID
+  string uuid = 14;
+
+  // CPU microcode version.
+  //
+  // Search field: System.CPUMicrocode
+  string cpu_microcode = 15;
+
+  // OS version, for example "14.04.5 LTS, Trusty Tahr". This is taken from the platform table
+  // in the shipyard DB, and the platform_info table in the osquery DB.
+  //
+  // Search field: System.OSVersion
+  string os_version = 16;
+
+  // BIOS version, for example "2.3.4". This is taken from the platform table
+  // in the shipyard DB, and the platform_info table in the osquery DB.
+  //
+  // Search field: System.BIOSVersion
+  string bios_version = 17;
+
+  // CPU signature, for example "00050654". This is the first eight characters taken from
+  // the value of the "serial" feature in the cpuid osquery table.
+  //
+  // Search field: System.CPUSignature
+  string cpu_signature = 18;
+}
+
+/**
+ * The Kernel message has information about the kernel the machine is running.
+ * The information comes from the kernel table in the shipyard database, and the kernel_info table in osquery.
+ *
+ * Search fields are all prepended with "Kernel".
+*/
+message Kernel {
+  // The arguments passed to the kernel at boot. All the arguments as a single string.
+  // For example "ro console=ttyS0,115200n8 biosdevname=0".
+  //
+  // Search field: Kernel.Arguments
+  string arguments = 1;
+
+  // The device the kernel was read from. For example, "UUID=d90418c4-daa4-4403-a3af-5b1835aedfaf".
+  //
+  // Search field: Kernel.Device
+  string device = 2;
+
+  // The path the kernel was read from. For example, "/boot/vmlinuz-4.9.77-1-generic".
+  //
+  // Search field: Kernel.Path
+  string path = 3;
+
+  // The kernel version the machine is running. For example, "4.9.77-1-generic".
+  //
+  // Search field: Kernel.Version
+  string version = 4;
+
+  // The time when the this kernel information was gathered from the machine.
+  //
+  // Search field: Kernel.Timestamp
+  google.protobuf.Timestamp timestamp = 5;
+}
+
+/**
+ * The SmartDrive message has SMART information from the drives in the machine. Physical drives are included in this
+ * table regardless of which controller or bus they connect through. This contrasts with FirmwareInfo messages which
+ * will not be present for drives connected through secondary controllers or buses.
+ * The information comes from the drive_info table in the shipyard database, and the smart_drive_info table in osquery.
+ *
+ * Search fields are all prepended with "SMARTDriveInfo".
+*/
+message SmartDrive {
+  // The linux device that identifies this drive. For example, "sdc".
+  // Only roughly 40% of our data set includes this information.
+  //
+  // KNOWN PROBLEM: For machines with more than 26 drives this name
+  // is truncated to three characters, so the 27th to 52nd drives
+  // will all be "sda" along with the first drive. This is tracked
+  // in JIRA ticket INFRADEV-502.
+  //
+  // Search field: SMARTDriveInfo.Device
+  string device = 1;
+
+  // A numerical id for the disk in the machine. These can change when
+  // the machine is rebooted or disks are unseated and reseated. This
+  // can also be "" for drives connected to secondary controllers.
+  //
+  // Search field: SMARTDriveInfo.DiskID
+  string disk_id = 2;
+
+  // The model of the drive. For example, "MTFDDAK1T9TCB".
+  //
+  // Search field: SMARTDriveInfo.DeviceModel
+  string device_model = 3;
+
+  // The serial number of the drive. For example, "18011B3744C5".
+  //
+  // Search field: SMARTDriveInfo.SerialNumber
+  string serial_number = 4;
+
+  // User capacity is a text description of the drive capacity.
+  // For example, "1,920,383,410,176 bytes [1.92 TB]".
+  //
+  // Search field: SMARTDriveInfo.UserCapacity
+  string user_capacity = 5;
+
+  // Firmware version running on the drive. These are alpha numeric
+  // strings without much structure. For example, "D0MU031" or PA28.
+  //
+  // Search field: SMARTDriveInfo.FirmwareVersion
+  string firmware_version = 6;
+}
+
+/**
+ * A SmartDrives message combines a list of SmartDrive messages with the time they were collected.
+ * The information comes from the drive_info table in the shipyard database, and the smart_drive_info table in osquery.
+ *
+ * Search fields are all prepended with "SMARTDriveInfo".
+*/
+message SmartDrives {
+  // A list of SMART drive information for the drives in the machine.
+  repeated SmartDrive drives = 1;
+
+  // The time when the SMART drive information was collected.
+  //
+  // Search field: SMARTDriveInfo.Timestamp
+  google.protobuf.Timestamp timestamp = 2;
+}
+
+/**
+ * An LLDP message has information about one network neighbor of a machine.
+ * The information comes from the host_lldp table in the shipyard database, and the lldp_neighbors table in osquery.
+ *
+ * Search fields are all prepended with "LLDP".
+*/
+message LLDP {
+  // The hostname of neighboring system.
+  //
+  // Search field: LLDP.RemoteSysname
+  string remote_sysname = 1;
+
+  // The id of the port on the neighbor that this machine is connected to.
+  // For example, "et-0/0/16"
+  //
+  // In many cases this is the same as the port_description, but when
+  // they differ this is shorter, for example "Gi0/19" vs "GigabitEthernet0/19".
+  // Because it is shorter we prefer PortID.
+  //
+  // Search field: LLDP.PortID
+  string port_id = 2;
+
+  // The description of the port on the neighbor that this machine is connected to.
+  // For example, "GigabitEthernet1/34"
+  //
+  // In many cases this is the same as the port_id, but when
+  // they differ this is longer, for example "GigabitEthernet0/19" vs "Gi0/19".
+  // Because port_id is shorter we prefer PortID.
+  //
+  // Search field: LLDP.PortDescription
+  string port_description = 3;
+
+  // Time when the LLDP information was gathered from the machine.
+  //
+  // Search field: LLDP.Timestamp
+  google.protobuf.Timestamp timestamp = 4;
+
+  // The host network interface associated with a given LLDP neighbor.
+  //
+  // Search field: LLDP.Interface
+  string interface = 5;
+}
+
+/**
+ * An MDDevice message has information about software RAID arrays configured on the machine.
+ * The information comes from the md_devices table in the shipyard database, and the md_devices table in osquery.
+ *
+ * Search fields are all prepended with "MDDevices".
+*/
+message MDDevice {
+  // The Linux name of the software RAID device, for example "md0".
+  //
+  // Search field: MDDevices.Name
+  string name = 1;
+
+  // The status of the device. This is always "active" in our data.
+  //
+  // Search field: MDDevices.Status
+  string status = 2;
+
+  // The numeric description of the RAID level. For example, "1", "10" or "6".
+  //
+  // Search field: MDDevices.RAIDLevel
+  string raid_level = 3;
+
+  // The size of the RAID array in blocks.
+  //
+  // Search field: MDDevices.Size
+  uint64 size = 4;
+
+  // The size of chunks in bytes.
+  //
+  // Search field: MDDevices.ChunkSize
+  uint64 chunk_size = 5;
+
+  // How many underlying partitions should be in the array, based on configuration.
+  //
+  // Search field: MDDevices.RAIDDisks
+  uint32 raid_disks = 6;
+
+  // How many underlying partitions, including spares, are in the array.
+  //
+  // Search field: MDDevices.TotalDisks
+  uint32 total_disks = 7;
+
+  // How many of the underlying partitions in the RAID array are currently working.
+  // This includes spares.
+  //
+  // Search field: MDDevices.WorkingDisks
+  uint32 working_disks = 8;
+
+  // How many of the underlying partitions in the RAID array are active in the configured array.
+  // If this is different from raid_disks, then something is up!
+  //
+  // Search field: MDDevices.ActiveDisks
+  uint32 active_disks = 9;
+
+  // How many of the underlying partitions in the RAID array have failed.
+  // In practice some failures cause partitions to disappear from the array
+  // completely and are not counted. Other times they are counted here.
+  //
+  // Search field: MDDevices.FailedDisks
+  uint32 failed_disks = 10;
+
+  // How many of the underlying partitions in the RAID array are hot spares.
+  // These will join the array if another disk fails. They are active
+  // disks that are not currently working disks.
+  //
+  // Search field: MDDevices.SpareDisks
+  uint32 spare_disks = 11;
+
+  // The state of the md array's superblock. For example, "clean", "unknown",
+  // or "bitmap_present".
+  //
+  // Search field: MDDevices.SuperblockState
+  string superblock_state = 12;
+
+  // Version of the md array's superblock. This is always "1.2" in our data.
+  //
+  // Search field: MDDevices.SuperblockVersion
+  string superblock_version = 13;
+
+  // Unix timestamp of the last superblock update. In seconds since
+  // epoch.
+  //
+  // Search field: MDDevices.SuperblockUpdateTime
+  uint64 superblock_update_time = 14;
+
+  // Bitmap chunk size. For example, "65536KB chunk".
+  //
+  // Search field: MDDevices.BitmapChunkSize
+  string bitmap_chunk_size = 15;
+
+  // Pages allocated in in-memory bitmap, if enabled.
+  // For example, "1/35 pages [4KB]".
+  //
+  // Search field: MDDevices.BitmapOnMem
+  string bitmap_on_mem = 16;
+
+  // External referenced bitmap file.
+  //
+  // Search field: MDDevices.BitmapExternalFile
+  string bitmap_external_file = 17;
+
+  // Progress of checking the array. Empty string if a check
+  // is not in progress.
+  // For example, "20.1% (1131458880/5624977920)".
+  //
+  // Search field: MDDevices.CheckArrayProgress
+  string checkarray_progress = 18;
+
+  // Estimated duration of the array check. Empty string if a check
+  // is not in progress.
+  // For example, "10840.7min".
+  //
+  // Search field: MDDevices.CheckArrayFinish
+  string checkarray_finish = 19;
+
+  // Speed of the check. Empty string if a check is not in progress.
+  // For example, "6907K/sec".
+  //
+  // Search field: MDDevices.CheckArraySpeed
+  string checkarray_speed = 20;
+
+  // Progress of the recovery activity. Empty string if a recovery is not in progress.
+  //
+  // Search field: MDDevices.RecoveryProgress
+  string recovery_progress = 21;
+
+  // Estimated duration of the recovery activity. Empty string if a recovery is not in progress.
+  //
+  // Search field: MDDevices.RecoveryFinish
+  string recovery_finish = 22;
+
+  // Speed of the recovery activity. Empty string if a recovery is not in progress.
+  //
+  // Search field: MDDevices.RecoverySpeed
+  string recovery_speed = 23;
+
+  // Progress of the resync activity. Empty string if a resync is not in progress.
+  // For example, "3.2% (180589568/5624977920)".
+  //
+  // Search field: MDDevices.ResyncProgress
+  string resync_progress = 24;
+
+  // Estimated duration of the resync activity. Empty string if a resync is not in progress.
+  // For example, "438.0min".
+  //
+  // Search field: MDDevices.ResyncFinish
+  string resync_finish = 25;
+
+  // Speed of the resync activity. Empty string if a resync is not in progress.
+  // For example, "207144K/sec".
+  //
+  // Search field: MDDevices.ResyncSpeed
+  string resync_speed = 26;
+
+  // Speed of the reshape activity. Empty string if a reshape is not in progress.
+  //
+  // Search field: MDDevices.ReshapeSpeed
+  string reshape_progress = 27;
+
+  // Estimated duration of the reshape activity. Empty string if a reshape is not in progress.
+  //
+  // Search field: MDDevices.ReshapeFinish
+  string reshape_finish = 28;
+
+  // Speed of the reshape activity. Empty string if a reshape is not in progress.
+  //
+  // Search field: MDDevices.ReshapeSpeed
+  string reshape_speed = 29;
+
+  // Unclear what this field represents. It is always the string "<none>" in our data.
+  //
+  // Search field: MDDevices.UnusedDevices
+  string unused_devices = 30;
+
+  // Other information associated with the array from /proc/mdstat.
+  // For example, "super 1.2 512K chunks 2 near-copies"
+  //
+  // Search field: MDDevices.Other
+  string other = 31;
+}
+
+
+/**
+ * An MDDrive message has information about one partition within a software RAID array.
+ * The information comes from the md_drives table in the shipyard database, and the md_drives table in osquery.
+ *
+ * Search fields are all prepended with "MDDrives".
+*/
+message MDDrive {
+  // The Linux name of the md device this drive is a part of.
+  // For example, "md1".
+  //
+  // Search field: MDDrives.DeviceName
+  string device_name = 1;
+
+  // The Linux name of this drive partition.
+  // For example, "sdc2".
+  //
+  // Search field: MDDrives.DriveName
+  string drive_name = 2;
+
+  // The virtual "slot" number within the md array that this partition occupies.
+  // This will be an empty string for failed or most recovering drives.
+  // For example, "6" or "".
+  //
+  // Search field: MDDrives.Slot
+  string slot = 3;
+
+  // The state of this drive within the md array.
+  // For example "active sync", "recovering", "removed", or "faulty".
+  //
+  // Search field: MDDrives.State
+  string state = 4;
+}
+
+/**
+ * An MD message encapsulates information about MD arrays or devices, and the underlying drives that make them up.
+ *
+ * We may remove this message in the future to flatten and simplify the protobuf data model.
+*/
+message MD {
+  // The MD devices or software RAID arrays that are configured on the machine.
+  // You can search directly against individual MDDevice instances. This structure
+  // is not part of search.
+  repeated MDDevice devices = 1;
+
+  // The time when the MDDevice list was captured on the machine.
+  google.protobuf.Timestamp devices_timestamp = 2;
+
+  // The individual partitions that make up the configured MD devices on this
+  // machine. They are all the partitions that are participating in software RAID.
+  // You can search directly against individual MDDrive instances. This structure
+  // is not part of search.
+  repeated MDDrive drives = 3;
+
+  // The time when the MDDrive list was captured on the machine.
+  google.protobuf.Timestamp drives_timestamp = 4;
+}
+
+/**
+ * MegaFirmware messages have information about drive temperature and the operational state of the drive.
+ * The information comes from the raid_firmware table in the shipyard database, and the megaraid_pd table in osquery.
+ * The table is populated whether or not a MegaRAID device is installed.
+ * Drives not connected through an HBA or RAID controller, for example on storage data nodes, will not appear
+ * in these messages at all. This contrasts with the SmartDrive message which will include them.
+ *
+ * Search fields are all prepended with "FirmwareInfo".
+*/
+message MegaFirmware {
+  // Device id is a kernel assigned numeric identifier for the drive.
+  // It corresponds to the disk_id in SmartDrive messages.
+  //
+  // Search field: FirmwareInfo.DeviceID
+  uint32 device_id = 1;
+
+  // Detected temperature of the drive.
+  // Around 20% of our drives do not report temperature in this way.
+  // For example, "30C (86.00 F)" or "N/A" if it is not reported.
+  //
+  // Search field: FirmwareInfo.DriveTemperature
+  string drive_temperature = 2;
+
+  // Firmware state is the state of the drive relative to the controller's Hardware RAID system.
+  // For example, "Online, Spun Up", "JBOD", "Hotspare, Spun Up", "Hotspare, Spun down", "Failed",
+  // "Unconfigured(good), Spun Up", or "Unconfigured(bad)".
+  // JBOD or Just a Bunch Of Disks indicates that the controller is not performing Hardware RAID.
+  //
+  // SearchField: FirmwareInfo.FirmwareState
+  string firmware_state = 3;
+
+  // The slot number on the controller occupied by this drive.
+  // Other drives in the system connected through other controllers might have the same slot number!
+  //
+  // Search field: FirmwareInfo.SlotNumber
+  string slot_number = 4;
+}
+
+/**
+ * MegaSas messages combine the MegaFirmware messages for all drives in the fleet, with the Hardware RAID level for
+ * machines that are running hardware RAID.
+ * The information comes from the raid_level table in the shipyard database, and the megaraid_ld table in osquery.
+ * The message is populated whether or not the system is using Hardware RAID.
+ *
+ * We may remove this message in the future to flatten and simplify the protobuf data model.
+*/
+message MegaSas {
+  // A list of MegaFirmware messages for each drive connected through the machine's HBA or RAID controller.
+  // You can search directly against individual FirmwareInfo instances. This message
+  // is not part of search.
+  repeated MegaFirmware device_firmware = 1;
+
+  // The time when the FirmwareInfo messages were collected from the machine.
+  //
+  // Search field: FirmwareInfo.Timestamp
+  google.protobuf.Timestamp device_firmware_timestamp = 2;
+
+  // The descriptive RAID level string from the controller.
+  // For example, "Primary-5, Secondary-0, RAID Level Qualifier-3" or
+  // "Primary-0, Secondary-0, RAID Level Qualifier-0", "Primary-1, Secondary-0, RAID Level Qualifier-0",
+  // "Primary-6, Secondary-0, RAID Level Qualifier-3", or "".
+  // This is the empty string if the machine is not running hardware RAID.
+  //
+  // Search field: RAIDLevel
+  string raid_level = 3;
+
+  // This field will not be populated.
+  // TODO: Remove this field.
+  google.protobuf.Timestamp raid_level_timestamp = 4;
+}
+
+/**
+ * A ChefReport message is a report for a single chef run on a machine. Based on the structure of the ChefReports
+ * message that they appear in, each message is either the most recent successful chef run, or the most recent
+ * unsuccessful chef run.
+ * The information comes from the chef_reports table in the shipyard database, and the chef_reports table in osquery.
+ *
+ * Search fields are all prepended with either "ChefReports.LastSuccess" or "ChefReports.LastFailure".
+*/
+message ChefReport {
+  // Run id is a chef-generated UUID that uniquely identifies this run amongst all the runs across DigitalOcean.
+  // For example, "d5f490ad-a387-4604-add7-172f45c0b190".
+  //
+  // Search field: ChefReports.LastSuccess.RunID or ChefReports.LastFailure.RunID
+  string run_id = 1;
+
+  // When this particular chef run started. Unlike other timestamps in the API it is not when the information was
+  // collected. It may be significantly in the past while still being the latest data, if chef has continuously
+  // been having the other success/failure outcome since.
+  //
+  // Search field: ChefReports.LastSuccess.StartTime or ChefReports.LastFailure.StartTime
+  google.protobuf.Timestamp start_time = 2;
+
+  // When this particular chef run ended. Unlike other timestamps in the API it is not when the information was
+  // collected. It may be significantly in the past while still being the latest data, if chef has continuously
+  // been having the other success/failure outcome since.
+  //
+  // Search field: ChefReports.LastSuccess.EndTime or ChefReports.LastFailure.EndTime
+  google.protobuf.Timestamp end_time = 3;
+
+  // Whether this particular chef run was successful.
+  //
+  // Search field: ChefReports.LastSuccess.Success or ChefReports.LastFailure.Success
+  bool success = 4;
+
+  // The chef run list that was run during this particular chef run.
+  // For example, "recipe[jemalloc::default] recipe[ossec] role[alpha-master] role[disabled_monitoring]", or
+  // "role[hypervisor-node]".
+  //
+  // Search field: ChefReports.LastSuccess.RunList or ChefReports.LastFailure.RunList
+  string run_list = 5;
+}
+
+/**
+ * A ChefReports message combines ChefReport messages for the most recent successful and unsuccessful chef runs on the
+ * machine.
+ * The information comes from the chef_reports table in the shipyard database, and the chef_reports table in osquery.
+ *
+ * Search fields are all prepended with "ChefReports".
+*/
+message ChefReports {
+  // A ChefReport message for the last successful chef run on the machine.
+  // This will be empty if there are no successful runs reported in "/var/chef/reports".
+  //
+  // Search directly against the ChefReport message using the prefix "ChefReports.LastSuccess".
+  ChefReport last_success = 1;
+
+  // A ChefReport message for the last failed chef run on the machine.
+  // This will be empty if there are no failed runs reported in "/var/chef/reports".
+  //
+  // Search directly against the ChefReport message using the prefix "ChefReports.LastFailure".
+  ChefReport last_failure = 2;
+
+  // The time of the last known chef run. This is not the time when the data was collected as it is for other
+  // messages within this API.
+  //
+  // Search field: ChefReports.Timestamp
+  google.protobuf.Timestamp timestamp = 3;
+}
+
+/**
+ * A HostDetailsRequest message is used with the GetHostDetails to request details on a single, specific machine.
+ * The server will only use the value of a single field, so it only makes sense to populate a single field.
+ * Except for the key field, requests using this message are converted to Search requests on the server, so using the
+ * Search service directly is preferred.
+ *
+ * This message is not itself searchable.
+*/
+message HostDetailsRequest {
+  // hostname is checked after key, and before tor_name and ip. If the hostname field has been set to something
+  // other than an empty string, the request will be converted in to a search for Hostname:"<value of hostname>",
+  // in other words a search for an exact match on the Hostname field of the Host message.
+  string hostname = 1 [deprecated=true];
+
+  // tor_name is checked after key and hostname, and before ip. If the hostname field has been set to something
+  // other than an empty string, the request will be converted in to a search for LLDP.RemoteSysname:"<value of tor_name>",
+  // in other words a search for an exact match on the RemoteSysname field of the LLDP message.
+  string tor_name = 2 [deprecated=true];
+
+  // ip is checked after key, hostname and tor_name. If the hostname field has been set to something
+  // other than an empty string, the request will be converted in to a search for Addresses.Address:"<value of ip>",
+  // in other words a search for an exact match on the Address field of the Address message.
+  string ip = 3 [deprecated=true];
+
+  // key is checked first, before hostname, tor_name and ip. If the key field has been set to a MachineKey with a
+  // non-empty system_serial, a machine will be looked up using the exact system_serial. At the time of writing
+  // this is the API call made to populate individual machine pages on the web UI.
+  MachineKey key = 4;
+}
+
+/**
+ * A Ports message includes the ports a machine is connected to.
+ * The information comes from the serial_pdu table in the shipyard database, and upstream from the servers table in the
+ * alpha database.
+ *
+ * Search fields are all prepended with "Ports".
+*/
+message Ports {
+  // The serial console server port the machine is connected to. Sometimes known as og port after the Opengear brand of
+  // most of our serial console server hardware.
+  // For example, "nyc2-a0-cs36:18".
+  //
+  // Search field: Ports.Serial
+  string serial = 1;
+
+  // The PDU port the machine is connected to.
+  // For example, "nyc2pdu71:ab9".
+  //
+  // Search field: Ports.PDU
+  string pdu = 2;
+
+  // The time when the data was copied from the Alpha database. This data is copied on a 24 hour schedule, in contrast
+  // to other data which should be updated once per hour.
+  //
+  // Search field: Ports.Timestamp
+  google.protobuf.Timestamp timestamp = 3;
+}
+
+/**
+ * A RackID message identifies a Rack, without having specifics of the rack or its contents.
+ * The information comes from the rack table in the shipyard database, and is derived from LLDP information and Alpha
+ * database information.
+ * It is used as a child of Machine messages to avoid a circular structure where Machines refer to the Rack that they
+ * are in, and that Rack refers back to the Machine.
+ *
+ * Search fields are not prepended with anything.
+ */
+message RackID {
+  // This was the Shipyard database id for the rack.
+  reserved 1;
+  reserved "db_id";
+
+  // The site where the rack is located.
+  // For example, "blr1" or "ams3".
+  //
+  // Search field: Site
+  string site = 2;
+
+  // The internal DigitalOcean name of the rack.
+  // For example, "A0R13", "10" or "Stage2-R12".
+  //
+  // Search field: Rack
+  string name = 3;
+
+  // The data center facility ID for the rack.
+  // For example, "103" or "201.c09.15".
+  //
+  // Search field: FacilityID
+  string facilityID = 4;
+}
+
+/**
+ * A Rack message includes identifiers for a rack and the details and contents of the rack.
+ * The information comes from the rack and rack_machines tables in the shipyard database, and upstream
+ * is derived from lldp information and the servers table in the alpha database.
+ *
+ * We are planning to remove distinct Rack information from the API, and only have information about racks available
+ * through the machines that are in a rack.
+ *
+ * Since only machines are searchable, nothing unique to this message is searchable. RackID fields are independently
+ * searchable.
+*/
+message Rack {
+  // We plan to remove this, and racks would be represented only by the RackID sub-message of Machines.
+  option deprecated = true;
+
+  // A RackID sub-message with all the id attributes for this rack.
+  RackID id = 1;
+
+  // A list of RackMachine sub-messages with details about the machines contained in the rack.
+  repeated RackMachine machines = 2;
+
+  // Removed in favor of field nested in RackID
+  reserved 3;
+  reserved "facilityID";
+
+  // The height of the rack.
+  int64 height = 4;
+}
+
+/**
+ * A RackMachine message includes a machine and its elevation within the containing Rack.
+ * The information comes from the rack_machines table in the shipyard database, and upstream
+ * is derived from lldp information and the servers table in the alpha database.
+ *
+ * We are planning to remove distinct Rack information from the API, and only have information about racks available
+ * through the machines that are in a rack.
+ *
+ * Since only machines are searchable, nothing unique to this message is searchable. Machines themselves are independently
+ * searchable.
+*/
+message RackMachine {
+  // We plan to remove these in favor of putting elevation and all Rack details in a sub-message of Hosts.
+  option deprecated = true;
+
+  // The elevation of the machine in the containing rack as derived from lldp and serial console port information.
+  // RackMachine messages should be included for all known elevations of a Rack (based on height or max observed
+  // elevation). Elevation starts at the bottom of the rack with 1, and counts up.
+  uint32 elevation = 1;
+
+  // The MachineID for the machine occupying this elevation in the rack. This will be null if the elevation is
+  // occupied by something unknown to Shipyard, occupied by a machine that is taller than 1U or is genuinely empty.
+  MachineID machine = 2;
+}
+
+/**
+ * A MemoryDevice message describes RAM sticks in a machine.
+ * The information comes from the memory_devices table in the shipyard database, and the memory_devices in osquery.
+ *
+ * Search fields are all prepended with "MemoryDevices".
+*/
+message MemoryDevice {
+  // The storage size of the RAM stick in Gigabytes.
+  // For example, 8 or 32.
+  //
+  // Search field: MemoryDevices.Size
+  uint32 size = 1;
+
+  // A string describing the logical location of the RAM relative to the machine's sockets.
+  // The format of this varies with the chassis manufacturer and even the model.
+  // For example, "B2", "PROC 1 DIMM 1", "DIMM_B4", "P2-DIMMF1" and other formats.
+  //
+  // Search field: MemoryDevices.DeviceLocator
+  string device_locator = 2;
+
+  // The maximum speed of the RAM stick in MHz.
+  // For example, 1600 or 2133
+  //
+  // Search field: MemoryDevices.MaxSpeed
+  uint32 max_speed = 3;
+
+  // The manufacturer of the RAM stick. This is sometimes the name of the manufacturer, and sometimes a
+  // hex strings that refers to JEDEC lookup tables.
+  // For example, "HP", "Samsung", or "00AD00B300AD".
+  //
+  // Search field: MemoryDevices.Manufacturer
+  string manufacturer = 4;
+
+  // The serial number of the RAM stick. There are 8 hex digit strings. They are sometimes empty and there
+  // can be duplication with bad values like 00000000.
+  // For example, "", "00000000", "020CDFAA", or "ED0482C9".
+  //
+  // Search field: MemoryDevices.SerialNumber
+  string serial_number = 5;
+
+  // The part number of the RAM stick.
+  // For example, "M393B2G70QH0-", or "KCPC7G-MIA".
+  //
+  // Search field: MemoryDevices.PartNumber
+  string part_number = 6;
+}
+
+/**
+ * A MemoryDevices message describes RAM sticks in a machine.
+ * The information comes from the memory_devices table in the shipyard database, and the memory_devices in osquery.
+ *
+ * We may remove this in the future to simplify and flatten the data model.
+ *
+ * Searches can be done directly on MemoryDevice matches, prefixing the fields with "MemoryDevices".
+*/
+message MemoryDevices {
+  // The timestamp when the MemoryDevice data was gathered on the machine.
+  //
+  // Search field: MemoryDevices.Timestamp
+  google.protobuf.Timestamp timestamp = 1;
+
+  // A list of MemoryDevice entries for the RAM sticks in the machine.
+  //
+  // Searches can be done directly on the MemoryDevice messages.
+  repeated MemoryDevice entries = 2;
+}
+
+// A StorageDevice message describes the HBA or RAID controller in a machine.
+// The information comes from the storage_devices table in the shipyard database, and the pci_devices table in osquery,
+// filtered for pci_class = 'Mass storage controller'.
+//
+// The pci_class_id is effectively always "0x01" because of the filtering.
+//
+// Search fields are prepended with "HBAStorageDevices".
+message StorageDevice {
+  // The PCI subclass id as a prefixed 2-digit hex string.
+  // For example, "0x07".
+  //
+  // Search field: HBAStorageDevices.PCISubClassID
+  string pci_subclass_id = 1;
+
+  // The PCI vendor id as a 4-digit lowercase hex string.
+  // For example, "9005".
+  //
+  // Search field: HBAStorageDevices.PCIVendorID
+  string pci_vendor_id = 2;
+
+  // The PCI model id as a 4-digit lowercase hex string.
+  // For example, "028f".
+  //
+  // Search field: HBAStorageDevices.PCIModelID
+  string pci_model_id = 3;
+
+  // The PCI subsystem vendor id as a 4-digit lowercase hex string.
+  // When a component is white-labeled by an OEM, the subsystem identifiers are changed.
+  // For example, "103c".
+  //
+  // Search field: HBAStorageDevices.PCISubsystemVendorID
+  string pci_subsystem_vendor_id = 4;
+
+  // The PCI subsystem vendor id as a 4-digit lowercase hex string.
+  // When a component is white-labeled by an OEM, the subsystem identifiers are changed.
+  // For example, "0654".
+  //
+  // Search field: HBAStorageDevices.PCISubsystemModelID
+  string pci_subsystem_model_id = 5;
+
+  // A description of the HBA or RAID controller.
+  // This is currently sourced on the machine when the data is collected so may vary between machines even
+  // if their devices have exactly the same PCI identifiers.
+  //
+  // This is a concatenation of the form "<vendor> <model>, <subsystem vendor> <subsystem model>", with missing
+  // components omitted.
+  //
+  // Search field: this field is not directly searchable, but individual components can be searched with
+  // HBAStorageDevices.Vendor, HBAStorageDevices.Model, HBAStorageDevices.SubsystemVendor, or HBAStorageDevices.SubsystemModel
+  string description = 6;
+
+  // The time when the HBA or RAID controller information was collected from the machine.
+  //
+  // Search field: HBAStorageDevices.Timestamp
+  google.protobuf.Timestamp timestamp = 7;
+
+  // The PCI model description of the HBA or RAID controller.
+  // This is currently sourced on the machine when the data is collected so may vary between machines even
+  // if their devices have exactly the same PCI identifiers.
+  //
+  // Search field: HBAStorageDevices.Model
+  string pci_model = 8;
+}
+
+// The NvmeDevice message describes NVMe devices in a machine.
+// The information comes from the nvme_devices table in the shipyard database.
+// The nvme_devices table is populated from the nvme_devices table in osquery
+// via the `nvme` tool on a machine.
+message NvmeDevice {
+  // The timestamp when the NVMe data was gathered on the machine.
+  //
+  // Search field: NvmeDevice.Timestamp
+  google.protobuf.Timestamp timestamp = 1;
+
+  // The linux device path.
+  //
+  // Search field: NvmeDevice.Path
+  string path = 2;
+
+  // The device firmware version.
+  //
+  // Search field: NvmeDevice.Firmware
+  string firmware = 3;
+
+  // The device model number.
+  //
+  // Search field: NvmeDevice.ModelNumber
+  string model_number = 4;
+
+  // The device's serial number.
+  //
+  // Search field: NvmeDevice.SerialNumber
+  string serial_number = 5;
+
+  // The total physical size of the device in bytes.
+  //
+  // Search field: NvmeDevice.PhysicalSizeBytes
+  int64 physical_size_bytes = 6;
+
+  // The physical bay in which the device is located.
+  //
+  // Search field: NvmeDevice.Bay
+  int32 bay = 7;
+
+  // The physical slot in which the device is located.
+  //
+  // Search field: NvmeDevice.Slot
+  int32 slot = 8;
+}
+
+// A PowerSupplies message describes power supplies in a machine.
+// The information comes from the power_supply table in the shipyard database.
+// The power_supply table is populated from the ipmi_sdr table in osquery
+// where entity type is 10, entity is 1 or 2, and name is manufacturer specific, but status related.
+message PowerSupplies {
+  // The timestamp when the power supply data was gathered on the machine.
+  //
+  // Search field: PowerSupplies.Timestamp
+  google.protobuf.Timestamp timestamp = 1;
+
+  // The status of the two power supplies on a machine. Each may be empty.
+  // For example, "Presence detected", "Presence detected, Failure detected", "90 Watts, Presence detected"
+  //
+  // Search field: PowerSupplies.PowerSupply1Status
+  string power_supply_1_status = 2;
+  // Search field: PowerSupplies.PowerSupply2Status
+  string power_supply_2_status = 3;
+}
+
+// A MachineSKU message is the SKU identifier of a machine assembly.
+// The information in this message comes from the "skus" and "sku_lookup_*" tables in the
+// shipyard database.
+// It is derived from several osquery tables and does not map to a single place.
+// Although descriptions here might map to other fields in the messages that make up a machine, they may have also
+// been sanitized by the sku_lookup_* tables to shorter, standardized strings.
+//
+// Search fields are all prepended with "SKU".
+message MachineSKU {
+  // The full detailed sku of the machine.
+  // For example, "M016-P018-R00B-N000-H006-S01F-Q07".
+  //
+  // Search field: SKU.DetailedSKU
+  string detailed_sku = 1;
+
+  // The description of the model identified by the SKU.
+  // For example, "ProLiant DL360 Gen10".
+  //
+  // Search field: SKU.Model
+  string model = 2;
+
+  // The description of the processor identified by the SKU.
+  // For example, "Intel(R) Xeon(R) Gold 6140 CPU @ 2.30GHz".
+  //
+  // Search field: SKU.Processor
+  string processor = 3;
+
+  // The total RAM in the machine, as identified by the SKU.
+  // For example, "768".
+  //
+  // Search field: SKU.RAM
+  string ram = 4;
+
+  // The description of the NIC, as identified by the SKU.
+  // For example, "Stand-up ConnectX-4 Lx EN, 25GbE dual-port SFP28, PCIe3.0 x8, MCX4121A-ACAT".
+  //
+  // Search field: SKU.NIC
+  string nic = 5;
+
+  // The description of the HBA controller or RAID controller, as identified by the SKU.
+  // For example, "E208i-a SR Gen10".
+  //
+  // Search field: SKU.HBA
+  string hba = 6;
+
+  // The description of the most common drive model in the machine.
+  // For example, "Micron_5100_MTFDDAK1T9TCB".
+  //
+  // Search field: SKU.Storage
+  string storage = 7;
+
+  // The total count of drives in the machine. They may not all be of the model described in the storage field.
+  // For example, 7.
+  //
+  // Search field: SKU.StorageQuantity
+  int32 storage_quantity = 8;
+
+  // The full friendly SKU of the machine.
+  // For example, "HV03-00-05".
+  //
+  // Search field: SKU.FriendlySKU
+  string friendly_sku = 9;
+
+  // The full expected SKU of the machine.
+  // For example, "HV03-00-06".
+  //
+  // Search field: SKU.ExpectedFriendlySKU
+  string expected_friendly_sku = 10;
+
+  // The full detailed sku we expect of the machine.
+  // For example, "M016-P018-R00B-N000-H006-S01F-Q07".
+  //
+  // Search field: SKU.ExpectedDetailedSKU
+  string expected_detailed_sku = 11;
+
+}
+
+// ExpectedFriendlySKU
+message ExpectedFriendlySKU {
+  string systemSerial = 1;
+  string expectedFriendlySKU = 2;
+  string poNumber = 3;
+  string serverMAC = 4;
+  string bmcMAC = 5;
+}
+
+// GetBMCRequest
+message GetBMCRequest {
+  // The system serial you want to get BMC information for.
+  string system_serial = 1;
+}
+
+// A message representing BMC data.
+message BMC {
+  // The system serial.
+  string system_serial = 1;
+
+  // The MAC address for the BMC.
+  string mac_address = 2;
+
+  // The IP Address of the BMC.
+  string ip_address = 3;
+
+  // The time that BMC was added to Shipyard.
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+// A request to override the BMC information for a given serial.
+message OverrideBMCRequest {
+  // The system serial.
+  string system_serial = 1;
+
+  // The MAC address for the BMC.
+  string mac_address = 2;
+
+  // The IP Address of the BMC.
+  string ip_address = 3;
+}
+
+// A response to a request to override the BMC for a given serial.
+message OverrideBMCResponse {}
+
+
+// A request for BMC information for a list of system serials.
+message ListBMCRequest {
+  // A list of system serials.
+  repeated string system_serial = 1;
+}
+
+// A response to a request for a list of system serials.
+message ListBMCResponse {
+  // A list of BMC data.
+  repeated BMC bmc = 1;
+}
+
+// A request for all known BMC information.
+message ListAllBMCRequest {}
+
+// A request for BMC Discovery information.
+message BMCDiscoveryRequest {
+  // The hostname of the BMC.
+  string hostname = 1;
+
+  // The MAC address of the BMC.
+  string mac_address = 2;
+
+  // The IP Address of the BMC.
+  string ip_address = 3;
+
+  // The region of the BMC.
+  string region = 4;
+}
+
+// A response for BMC Discovery information.
+message BMCDiscoveryResponse {
+	// BMC data structure response.
+	BMC bmc = 1;
+}
+
+// A request for a list of all servers missing from Shipyard via BMC information.
+message FindMissingBMCHostsRequest {}
+
+// A response for a list of all servers missing from Shipyard via BMC information.
+message FindMissingBMCHostsResponse {
+  // A list of BMC data.
+  repeated BMC bmc = 1;
+}
+
+// A request for a list of all servers found in Shipyard via BMC information.
+message FindBMCHostsRequest {}
+
+// A response for a list of all servers found in Shipyard via BMC information.
+message FindBMCHostsResponse {
+  // A list of BMC data.
+  repeated BMC bmc = 1;
+}
+

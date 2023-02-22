@@ -1,0 +1,32 @@
+---
+# just copies latest iPXE artifacts to host for NAS nodes
+- name: copy iPXE artifacts
+  community.docker.docker_container:
+    name: ipxe-tftp
+    container_default_behavior: compatibility
+    image: docker/infra-eng/ipxe-tftp:{{ ipxe_docker_tag }}
+    pull: true
+    state: started
+    restart: yes
+    recreate: yes
+    network_mode: host
+    exposed_ports:
+      - "69:69/udp"
+    memory: 512M
+    keep_volumes: yes
+    volumes:
+      - "/srv/tftpd:/tftpd"
+      - "/srv/www:/www"
+    entrypoint: ["/entrypoint.sh"]
+
+- name: run ipxe-tftp container
+  community.docker.docker_container:
+    name: ipxe-tftp
+    container_default_behavior: compatibility
+    state: started
+    restart: yes
+    recreate: yes
+    restart_policy: on-failure
+    restart_retries: 2
+    network_mode: host
+  when: "'nas' not in inventory_hostname.split('.')[0]"

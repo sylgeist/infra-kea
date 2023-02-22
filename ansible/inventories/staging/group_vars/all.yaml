@@ -1,0 +1,3 @@
+---
+kea_stork_host: stork.staging
+kea_db_user_password: "{{ lookup('community.hashi_vault.hashi_vault', 'secret=secret/platform/netboot/staging:KEA_DB_USER_PASSWORD cacert={{ vault_ca }} url={{ vault_url }}') }}"

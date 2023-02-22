@@ -1,0 +1,199 @@
+syntax = "proto3";
+
+package dorpc;
+
+import "google/protobuf/descriptor.proto";
+import "google/protobuf/duration.proto";
+
+extend google.protobuf.FileOptions {
+  // DeprecatesPackage can be specified on a proto file, which indicates an old package name
+  // for the contents of the file. Services defined in it will respond to RPCs using this
+  // package name as well as the current package name.
+  // Example proto definition:
+  //   package some.new.package;
+  //   option (dorpc.deprecates_package) = "some.old.package";
+  //
+  //   service Foo {
+  //     ...
+  //   }
+  //
+  // A DORPC server providing the Foo service will respond appropriately to clients that
+  // know the server as some.old.package.Foo as well as clients that know it as
+  // some.new.package.Foo.
+  //
+  string deprecates_package = 60000;
+}
+
+extend google.protobuf.ServiceOptions {
+  // APIVersion can be specified on a service definition, which will be passed
+  // from client to server so that the server knows (and can log) which version of
+  // the API the client was built against.
+  //
+  // Example proto definition:
+  //
+  //   service Foo {
+  //     option (dorpc.api_version) = "1.0-beta";
+  //   }
+  //
+  // In Go:
+  //   GetFooAPIVersion() == "1.0-beta"
+  string api_version = 60000;
+
+  // DevHostname specifies the default hostname being used for TLS certs in
+  // development.
+  //
+  // This should almost never need to be set unless the dev name is non-standard,
+  // which it should not be.
+  //
+  // For example:
+  //
+  //   service Foo {
+  //     option (dorpc.dev_hostname) = "foo.dev";
+  //   }
+  //
+  // When connecting to localhost addresses, the default dorpc client will
+  // attempt to verify the hostname as "foo.dev"
+  // instead of "localhost".
+  string dev_hostname = 60001;
+
+  // Codename provides the canonical name of the service which handles this API.
+  // It should match how the server is registered in DNS.
+  //
+  // Since a service may implement multiple proto Service APIs, the API name
+  // may not match the name of the service, and multiple proto services may
+  // specify the same codename.
+  //
+  // If not provided, this defaults to taking a lower-case version of the
+  // proto API name.
+  //
+  // For example, the storage BlockStore API is implemented by a service
+  // code named "metastor":
+  //
+  //   service BlockStore {
+  //     option (dorpc.codename) = "metastor";
+  //   }
+  //
+  // This influences DevHostname, which will be
+  // "${ServiceName}.dev"
+  string codename = 60002;
+
+  // 60003, "env_config" is considered reserved.
+  // Protobuf doesn't allow reserving in an extended message
+
+  // LogRpcRequests can be set to true to enable automatic per-RPC request
+  // logging for all RPCs in the service. This can be overridden by per-RPC log
+  // options. RPCs returning status codes other than OK are logged by default
+  // unless NoLogRpcStatusCodes is configured.
+  bool log_rpc_requests = 60004;
+  // LogRpcResponses can be set to true to enable automatic per-RPC response
+  // logging for all RPCs in the service. This can be overridden by per-RPC log
+  // options. RPCs returning status codes other than OK are logged by default
+  // unless NoLogRpcStatusCodes is configured.
+  bool log_rpc_responses = 60005;
+
+  // NoLogRpcStatusCodes is a set of gRPC status codes that should not generate
+  // per-RPC error logs when response logging is disabled. Note that OK never
+  // generates an error log, so it need not be included in this list. This can
+  // be overridden by per-RPC log options.
+  repeated GRPCStatusCode no_log_rpc_status_codes = 60006;
+
+  // MetricServiceBuckets defines the buckets that should be used when collecting metrics
+  // at the service level. When this is enabled, each endpoint of the service will be added
+  // as a label named "method". If this annotation is not added, metrics will not be collected
+  // at the service level. This cannot be used when `MetricServiceGenerateBuckets` is used.
+  repeated MetricBucket metric_service_buckets = 60007;
+  // MetricServiceName defined the name of the metric for the service that is annotated by this
+  // annotation. The name will be prepended with `dorpc_metric_service_`
+  string metric_service_name = 60008;
+  //  MetricServiceDescription defines a human readable message describing the metrics being
+  // collected by this service level metric.
+  string metric_service_description = 60009;
+  // ServiceSLO is a list of SLO messages. This annotation will create an metrics interceptor
+  //with metric buckets that attempt to create the most accurate results when querying for
+  // the target quantile. The values should be strictly increasing with respect to durations.
+  // For example, a service whos SLOs are to respond to %99 of calls in 5s, %80 of calls in
+  // 4s and %75 of calls in 3s should add the annotations:
+  // 	option (dorpc.service_slo) = {target: .75, target_value:<seconds:3>};
+  // 	option (dorpc.service_slo) = {target: .80, target_value:<seconds:4>};
+  // 	option (dorpc.service_slo) = {target: .99, target_value:<seconds:5>};
+  repeated SLO service_slo = 60010;
+}
+
+// SLO is used for defining an SLO on a service level or endpoint.
+message SLO {
+  // The target percentage. This is value is expected to be postive and less
+  //  than 1.
+  float target = 1;
+  // Target value is the latency this slow should be within.
+  google.protobuf.Duration target_value = 2;
+}
+
+// MetricBucket defines which observed latencies will be tracked.
+message MetricBucket {
+  google.protobuf.Duration bucket_interval = 1;
+}
+
+extend google.protobuf.MethodOptions {
+  // LogRequests can be set to true to enable automatic per-RPC request
+  // logs. RPCs returning status codes other than OK are logged by default
+  // unless NoLogStatusCodes is configured.
+  bool log_requests = 60000;
+  // LogResponses can be set to true to enable automatic per-RPC response
+  // logs. RPCs returning status codes other than OK are logged by default
+  // unless NoLogStatusCodes is configured.
+  bool log_responses = 60001;
+  // NoLogStatusCodes is a set of gRPC status codes that should not generate
+  // per-RPC error logs when response logging is disabled. Note that OK never
+  // generates an error log, so it need not be included in this list.
+  repeated GRPCStatusCode no_log_status_codes = 60002;
+  // MethodSLO is a list of slo methods with target slos. This annotation will
+  // create an metrics interceptor with metric buckets that attempt to create the
+  // most accurate results when querying for the target quantile.
+  // The values should be strictly increasing with respect to durations.
+  // For example, an endpoint whos SLOs are to respond to %99 of calls in 5s, %80 of calls in
+  // 4s and %75 of calls in 3s should add the annotations:
+  // 	option (dorpc.method_slo) = {target: .75, target_value:<seconds:3>};
+  // 	option (dorpc.method_slo) = {target: .80, target_value:<seconds:4>};
+  // 	option (dorpc.method_slo) = {target: .99, target_value:<seconds:5>};
+  repeated  SLO method_slo = 60003;
+  // MetricMethodName specifies the metric method name of the method annotated by this annotation.
+  // The metric name will be prepended with `dorpc_metric_method_`
+  string metric_method_name = 60004;
+  // MetricMethodDescription is a human readable message to be associated to describe the metric
+  // being collected.
+  string metric_method_description = 60005;
+  // MetricMethodBuckets should only be used when `MetricMethodGenerateBuckets` is not used and when
+  // the user would like more control over the buckets to be used when collecting metrics. Note,
+  // buckets should be configured such that they are granular near the target slo and can be less so
+  // further away from the target slo.
+  repeated MetricBucket metric_method_buckets = 60006;
+}
+
+extend google.protobuf.FieldOptions {
+  // IsSensitive can be set to true if a field is sensitive. This will
+  // allow code that records fields for debugging to skip this field.
+  // e.g: this field will not be included in automated tracing of requests.
+  bool is_sensitive = 60001;
+}
+
+// GRPCStatusCode enumerates the standard gRPC status codes.
+// See https://godoc.org/google.golang.org/grpc/codes
+enum GRPCStatusCode {
+  OK = 0;
+  Canceled = 1;
+  Unknown = 2;
+  InvalidArgument = 3;
+  DeadlineExceeded = 4;
+  NotFound = 5;
+  AlreadyExists = 6;
+  PermissionDenied = 7;
+  ResourceExhausted = 8;
+  FailedPrecondition = 9;
+  Aborted = 10;
+  OutOfRange = 11;
+  Unimplemented = 12;
+  Internal = 13;
+  Unavailable = 14;
+  DataLoss = 15;
+  Unauthenticated = 16;
+}

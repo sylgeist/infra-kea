@@ -1,0 +1,16 @@
+DOMAIN_SUFFIX={{ inventory_hostname.split('.',1)[1] }}
+DDNS_SERVER_IP=127.0.0.1
+DDNS_TSIG_KEY={{ ddns_tsig }}
+KEA_DB={{ kea_db }}
+KEA_DB_HOST={{ kea_db_host }}
+KEA_DB_USER={{ kea_db_user }}
+KEA_DB_USER_PASSWORD={{ kea_db_user_password }}
+STORK_AGENT_SERVER_URL=https://{{ kea_stork_host }}
+STORK_AGENT_HOST={{ hostvars[inventory_hostname].ansible_default_ipv4.address }}
+VAULT_ROLE_ID={{ vault_role_id }}
+VAULT_SECRET_ID={{ vault_secret_id }}
+CERT_FILE=/usr/local/share/mtls/kea-client.crt
+KEY_FILE=/usr/local/share/mtls/kea-client.key
+CA_FILE_PATH=/usr/local/share/ca-certificates/CA.pem
+SECRET_PATH={{ vault_secret_path }}
+REGION={{ region }}

@@ -1,0 +1,20 @@
+---
+- hosts: kea-dhcp
+  become: yes
+  roles:
+    - { role: ipxe-tftp, tags: just_tftp }
+    - { role: kea-dhcp, tags: just_dhcp }
+    - { role: images-www, tags: just_www }
+- hosts: kea-stork
+  become: yes
+  roles:
+    - { role: kea-stork, tags: just_stork }
+- hosts: kea-db
+  become: yes
+  roles:
+    - { role: kea-db, tags: just_db }
+    - { role: kea-db-exporter, tags: just_exporter }
+- hosts: kea-api
+  become: yes
+  roles:
+    - { role: kea-api, tags: just_api }

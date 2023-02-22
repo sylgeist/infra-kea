@@ -1,0 +1,58 @@
+- name: add Docker apt signing key
+  ansible.builtin.apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    id: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
+    state: present
+
+- name: add Docker repository
+  apt_repository: repo={{ item }} state=present
+  with_items:
+    - 'deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable'
+
+- name: install packages
+  apt:
+    name: ['docker-ce', 'python3-pip']
+    state: present
+    update_cache: yes
+    cache_valid_time: 3600
+    install_recommends: no
+
+- name: install docker python module
+  ansible.builtin.pip:
+    executable: pip3
+    name: 'docker'
+    state: present
+
+- name: Check for Docker dir
+  ansible.builtin.stat:
+    path: "{{ docker_dir }}"
+  register: docker_dir_result
+
+- block:
+  - name: stop Docker
+    service:
+      name: docker
+      state: stopped
+
+  - name: create Docker dir under /opt
+    file:
+      path: '{{ docker_dir }}'
+      state: directory
+      owner: root
+      group: root
+      mode: 0711
+
+  - name: start Docker
+    service:
+      name: docker
+      state: started
+
+  - name: update Docker config
+    lineinfile:
+      dest: /etc/default/docker
+      line: 'DOCKER_OPTS="--graph {{ docker_dir }}"'
+      insertafter: "^#DOCKER_OPTS="
+
+  when: 
+    - docker_dir_result.isdir is defined
+    - docker_dir_result.isdir is False

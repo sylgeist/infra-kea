@@ -1,0 +1,6 @@
+---
+stork_database_password: "{{ lookup('community.hashi_vault.hashi_vault', 'secret=secret/platform/stork-dhcp/production:STORK_DATABASE_PASSWORD cacert={{ vault_ca }} url={{ vault_url }}') }}"
+stork_user_password: "{{ lookup('community.hashi_vault.hashi_vault', 'secret=secret/platform/stork-dhcp/production:STORK_USER_PASSWORD cacert={{ vault_ca }} url={{ vault_url }}') }}"
+stork_common_name: stork.prod
+stork_app_docker_tag: a0454f2
+stork_db_docker_tag: e57c255

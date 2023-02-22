@@ -1,0 +1,62 @@
+---
+- name: Created cert volume
+  community.docker.docker_volume:
+    name: kea_mtls_certs
+
+- name: copy container environment file
+  template:
+    src: kea-dhcp_env.j2
+    dest: /root/kea-dhcp_env
+    owner: root
+    group: root
+    mode: 0400
+
+- name: create Kea dir on host
+  file:
+    path: /var/lib/kea-dhcp_container
+    state: directory
+    owner: root
+    group: root
+    mode: 0550
+
+- name: run Kea container
+  community.docker.docker_container:
+    name: kea-dhcp
+    container_default_behavior: compatibility
+    image: docker/infra-eng/kea-dhcp:{{ kea_docker_tag }}
+    pull: true
+    state: started
+    restart_policy: on-failure
+    restart_retries: 2
+    network_mode: host
+    memory: 4G
+    exposed_ports:
+      - "67:67/udp"
+      - "9547:9547/tcp"
+      - "8080:8080/tcp"
+    env_file: /root/kea-dhcp_env
+    keep_volumes: yes
+    mounts:
+      - source: kea_mtls_certs
+        target: /usr/local/share/mtls
+        type: volume
+      - source: /dev/log
+        target: /dev/log
+        type: bind
+      - source: /var/lib/kea-dhcp_container/kea
+        target: /var/kea
+        type: bind
+      - source: /var/lib/kea-dhcp_container/log
+        target: /var/log
+        type: bind
+      - source: /var/lib/kea-dhcp_container/stork-agent/certs
+        target: /var/lib/stork-agent/certs
+        type: bind
+      - source: /var/lib/kea-dhcp_container/stork-agent/tokens
+        target: /var/lib/stork-agent/tokens
+        type: bind
+
+- name: remove Kea container environment file
+  file:
+    path: /root/kea-dhcp_env
+    state: absent

@@ -1,0 +1,8 @@
+#!ipxe
+
+echo XXXX iPXE __GIT_COMMIT__
+
+dhcp
+ntp nas
+
+chain https://netbootd/api/v1/ipxe/${serial}

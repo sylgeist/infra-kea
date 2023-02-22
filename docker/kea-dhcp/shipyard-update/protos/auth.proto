@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package dorpc.auth;
+
+import "google/protobuf/descriptor.proto";
+
+extend google.protobuf.MethodOptions {
+    AuthModes modes = 75006;
+}
+
+message AuthModes {
+    // Setting unauthenticated will take priority over other auth modes
+    bool unauthenticated = 1;
+    bool public_id = 2;
+    bool public_uuid = 3;
+    bool okta = 4;
+    bool mtls = 5;
+    bool service_token = 6;
+}

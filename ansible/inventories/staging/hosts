@@ -1,0 +1,26 @@
+---
+all:
+  children:
+    kea-dhcp:
+      hosts:
+        staging-host1
+        staging-host2
+        staging-host3
+        staging-host4
+        staging-host5
+        staging-host6
+    kea-stork:
+      hosts:
+        staging-host1:
+    kea-db:
+      hosts:
+        staging-host1:
+    kea-db-exporter:
+      hosts:
+        staging-host1:
+    kea-api:
+      hosts:
+        staging-host1:
+    STAGING:
+      hosts:
+        staging-region:

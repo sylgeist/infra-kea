@@ -1,0 +1,436 @@
+---
+slack_attachment: &slack_attachment
+  title: "$BUILD_TEAM_NAME / $BUILD_PIPELINE_NAME build #$BUILD_NAME"
+  title_link: "$ATC_EXTERNAL_URL/builds/$BUILD_ID"
+  text: |
+    $TEXT_FILE_CONTENT
+  fallback: "success: \
+    $ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/\
+    $BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME "
+  color: "good"
+slack_success: &slack_success
+  put: notify-success
+  resource: notify-slack
+  params:
+    text_file: git_meta/log
+    text: ":hooray: *success* <$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/\
+      pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME|$BUILD_JOB_NAME> "
+    attachments:
+      - *slack_attachment
+slack_failure: &slack_failure
+  put: notify-failure
+  resource: notify-slack
+  params:
+    text_file: git_meta/log
+    text: ":sadpanda: *failure* <$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/\
+      pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME|$BUILD_JOB_NAME> "
+    attachments:
+      - <<: *slack_attachment
+        text: |
+          $TEXT_FILE_CONTENT
+        fallback: "failure: $ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/\
+          pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME "
+        color: "danger"
+
+get_pr: &get_pr
+  get: code
+  resource: pull-request
+  trigger: true
+  version: every
+  params: { git_depth: 25 }
+  timeout: 10m
+
+git_meta: &git_meta
+  task: git-meta
+  file: code/ci/tasks/git-meta.yml
+
+get_commit: &get_commit
+  get: code
+  resource: master
+  trigger: true
+  version: every
+  timeout: 5m
+
+pr_params: &pr_params
+  path: code
+  status: pending
+  context: "$BUILD_TEAM_NAME/$BUILD_PIPELINE_NAME/$BUILD_JOB_NAME"
+pr_pending: &pr_pending
+  put: pr-status-pending
+  resource: pull-request
+  params: *pr_params
+  get_params:
+    skip_download: true
+  timeout: 10m
+pr_failure: &pr_failure
+  <<: *pr_pending
+  put: pr-status-failure
+  params:
+    <<: *pr_params
+    status: failure
+pr_success: &pr_success
+  <<: *pr_pending
+  put: pr-status-success
+  params:
+    <<: *pr_params
+    status: success
+
+commit_pending: &commit_pending
+  put: commit-status-pending
+  resource: commit-status
+  params:
+    state: pending
+    commit: code
+  timeout: 10m
+commit_failure: &commit_failure
+  resource: commit-status
+  put: commit-status-failure
+  params:
+    state: failure
+    commit: code
+commit_success: &commit_success
+  resource: commit-status
+  put: commit-status-success
+  params:
+    state: success
+    commit: code
+
+get_kea_dhcp: &get_kea_dhcp
+  get: code
+  resource: pull-request
+  trigger: true
+  version: every
+  params: { depth: 25 }
+  timeout: 10m
+
+get_kea_api: &get_kea_api
+  get: code
+  resource: pull-request
+  trigger: true
+  version: every
+  params: { depth: 25 }
+  timeout: 10m
+
+get_kea_stork: &get_kea_stork
+  get: code
+  resource: pull-request
+  trigger: true
+  version: every
+  params: { depth: 25 }
+  timeout: 10m
+
+get_kea_db: &get_kea_db
+  get: code
+  resource: pull-request
+  trigger: true
+  version: every
+  params: { depth: 25 }
+  timeout: 10m
+
+get_kea_db_exporter: &get_kea_db_exporter
+  get: code
+  resource: pull-request
+  trigger: true
+  version: every
+  params: { depth: 25 }
+  timeout: 10m
+
+get_tftp: &get_tftp
+  get: code
+  resource: pull-request
+  trigger: true
+  version: every
+  params: { depth: 25 }
+  timeout: 10m
+
+resource_types:
+  - name: github-pr-resource
+    type: docker-image
+    source:
+      repository: docker/concourse/github-pr-resource
+      tag: dev_ea41f3d
+
+  - name: github-status-resource
+    type: docker-image
+    source:
+      repository: docker/concourse/github-status-resource
+      tag: dev
+
+  - name: slack-notification-resource
+    type: docker-image
+    source:
+      repository: cfcommunity/slack-notification-resource
+
+  - name: builder-register-image
+    type: registry-image
+    source:
+      repository: dockerhub-mirror/concourse/oci-build-task
+
+resources:
+  - name: pull-request
+    type: github-pr-resource
+    icon: github-circle
+    webhook_token: ((webhook_secret))
+    source:
+      access_token: ((ghe.access_token))
+      v3_endpoint: https://github/api/v3/
+      v4_endpoint: https://github/api/graphql
+      repository: platform/netboot
+  - name: notify-slack
+    type: slack-notification-resource
+    icon: slack
+    source:
+      url: ((slack_webhook))
+
+  - name: kea-dhcp-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: docker/infra-eng/kea-dhcp
+      tag: testing
+
+  - name: kea-api-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: docker/infra-eng/kea-api
+      tag: testing
+
+  - name: kea-stork-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: docker/infra-eng/kea-stork-app
+      tag: testing
+
+  - name: kea-db-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: docker/infra-eng/kea-db
+      tag: testing
+
+  - name: kea-db-exporter-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: docker/infra-eng/kea-db-exporter
+      tag: testing
+
+  - name: ipxe-tftp-image
+    type: registry-image
+    icon: docker
+    source:
+      repository: docker/infra-eng/ipxe-tftp
+      tag: testing
+
+jobs:
+  - name: build-kea-dhcp
+    public: true
+    build_log_retention:
+      minimum_succeeded_builds: 1
+    plan:
+      - *get_kea_dhcp
+      - in_parallel:
+          fail_fast: true
+          steps:
+            - *pr_pending
+            - *git_meta
+            - task: build
+              file: code/ci/build-kea-dhcp.yml
+              privileged: true
+
+    on_failure:
+      in_parallel:
+        - *pr_failure
+        - *slack_failure
+    on_error:
+      in_parallel:
+        - *pr_failure
+        - *slack_failure
+    on_abort:
+      in_parallel:
+        - *pr_failure
+        - *slack_failure
+    on_success:
+      in_parallel:
+        - *git_meta
+        - *pr_success
+        - *slack_success
+        - put: kea-dhcp-image
+          params: { image: image/image.tar }
+
+  - name: build-kea-api
+    public: true
+    build_log_retention:
+      minimum_succeeded_builds: 1
+    plan:
+      - *get_kea_api
+      - in_parallel:
+          fail_fast: true
+          steps:
+            - *pr_pending
+            - *git_meta
+            - task: build
+              file: code/ci/build-kea-api.yml
+              privileged: true
+
+    on_failure:
+      in_parallel:
+        - *pr_failure
+        - *slack_failure
+    on_error:
+      in_parallel:
+        - *pr_failure
+        - *slack_failure
+    on_abort:
+      in_parallel:
+        - *pr_failure
+        - *slack_failure
+    on_success:
+      in_parallel:
+        - *git_meta
+        - *pr_success
+        - *slack_success
+        - put: kea-dhcp-api
+          params: { image: image/image.tar }
+
+  - name: build-kea-stork
+    public: true
+    build_log_retention:
+      minimum_succeeded_builds: 1
+    plan:
+      - *get_kea_stork
+      - in_parallel:
+          fail_fast: true
+          steps:
+            - *pr_pending
+            - *git_meta
+            - task: build
+              file: code/ci/build-kea-stork.yml
+              privileged: true
+
+    on_failure:
+      in_parallel:
+        - *pr_failure
+        - *slack_failure
+    on_error:
+      in_parallel:
+        - *pr_failure
+        - *slack_failure
+    on_abort:
+      in_parallel:
+        - *pr_failure
+        - *slack_failure
+    on_success:
+      in_parallel:
+        - *git_meta
+        - *pr_success
+        - *slack_success
+        - put: kea-stork-image
+          params: { image: image/image.tar }
+
+  - name: build-kea-db
+    public: true
+    build_log_retention:
+      minimum_succeeded_builds: 1
+    plan:
+      - *get_kea_db
+      - in_parallel:
+          fail_fast: true
+          steps:
+            - *pr_pending
+            - *git_meta
+            - task: build
+              file: code/ci/build-kea-db.yml
+              privileged: true
+
+    on_failure:
+      in_parallel:
+        - *pr_failure
+        - *slack_failure
+    on_error:
+      in_parallel:
+        - *pr_failure
+        - *slack_failure
+    on_abort:
+      in_parallel:
+        - *pr_failure
+        - *slack_failure
+    on_success:
+      in_parallel:
+        - *git_meta
+        - *pr_success
+        - *slack_success
+        - put: kea-db-image
+          params: { image: image/image.tar }
+
+  - name: build-kea-db-exporter
+    public: true
+    build_log_retention:
+      minimum_succeeded_builds: 1
+    plan:
+      - *get_kea_db_exporter
+      - in_parallel:
+          fail_fast: true
+          steps:
+            - *pr_pending
+            - *git_meta
+            - task: build
+              file: code/ci/build-kea-db-exporter.yml
+              privileged: true
+
+    on_failure:
+      in_parallel:
+        - *pr_failure
+        - *slack_failure
+    on_error:
+      in_parallel:
+        - *pr_failure
+        - *slack_failure
+    on_abort:
+      in_parallel:
+        - *pr_failure
+        - *slack_failure
+    on_success:
+      in_parallel:
+        - *git_meta
+        - *pr_success
+        - *slack_success
+        - put: kea-db-exporter-image
+          params: { image: image/image.tar }
+
+  - name: build-ipxe
+    public: true
+    build_log_retention:
+      minimum_succeeded_builds: 1
+    plan:
+      - *get_tftp
+      - in_parallel:
+          fail_fast: true
+          steps:
+            - *pr_pending
+            - *git_meta
+            - task: build
+              file: code/ci/build-tftp.yml
+              privileged: true
+
+    on_failure:
+      in_parallel:
+        - *pr_failure
+        - *slack_failure
+    on_error:
+      in_parallel:
+        - *pr_failure
+        - *slack_failure
+    on_abort:
+      in_parallel:
+        - *pr_failure
+        - *slack_failure
+    on_success:
+      in_parallel:
+        - *git_meta
+        - *pr_success
+        - *slack_success
+        - put: ipxe-tftp-image
+          params: { image: image/image.tar }

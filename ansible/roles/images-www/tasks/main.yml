@@ -1,0 +1,27 @@
+---
+- name: Ensure /srv/www exists on host
+  file:
+    path: /srv/www
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+
+- name: run Nginx container
+  community.docker.docker_container:
+    name: images-www
+    container_default_behavior: compatibility
+    image: docker/images-www:{{ www_images_docker_tag }}
+    pull: true
+    state: started
+    restart_policy: on-failure
+    restart_retries: 2
+    network_mode: host
+    memory: 4G
+    exposed_ports:
+      - "80:80/tcp"
+    keep_volumes: yes
+    volumes:
+      - "/dev/log:/dev/log"
+      - "/srv/www:/usr/share/nginx/html:ro"
+  when: "'nas' not in inventory_hostname.split('.')[0]"

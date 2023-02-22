@@ -1,0 +1,59 @@
+---
+- name: Create stork-net docker network
+  include_role:
+    name: kea-stork
+    tasks_from: stork-net
+
+- name: Kea Stork - Ensure container dir exists on host
+  file:
+    path: /var/lib/kea-stork_container
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Kea Stork - generate tls params file
+  ansible.builtin.template:
+    src: kea-stork_tls.j2
+    dest: /var/lib/kea-stork_container/params.json
+    owner: root
+    group: root
+    mode: 0400
+
+- name: Stork App - copy environment file
+  ansible.builtin.template:
+    src: kea-stork_env.j2
+    dest: /root/kea-stork_env
+    owner: root
+    group: root
+    mode: 0400
+
+- name: run Kea Stork container
+  community.docker.docker_container:
+    name: kea-stork
+    hostname: stork
+    container_default_behavior: compatibility
+    image: docker/infra-eng/kea-stork:{{ kea_stork_docker_tag }}
+    pull: true
+    restart_policy: on-failure
+    restart_retries: 2
+    network_mode: bridge
+    networks:
+      - name: stork-net
+    memory: 4G
+    published_ports:
+      - "443:8080/tcp"
+    env_file: /root/kea-stork_env
+    keep_volumes: yes
+    mounts:
+      - source: /var/lib/kea-stork_container
+        target: /usr/local/share/tls
+        type: bind
+      - source: /dev/log
+        target: /dev/log
+        type: bind
+
+- name: remove Stork container environment file
+  file:
+    path: /root/kea-stork_env
+    state: absent

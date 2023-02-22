@@ -1,0 +1,3 @@
+---
+kea_db_host: kea-cb.staging
+vault_secret_path: secret/platform/netboot/kea-production-mtls

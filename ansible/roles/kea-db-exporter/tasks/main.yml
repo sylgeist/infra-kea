@@ -1,0 +1,39 @@
+---
+- name: Create stork-net docker network
+  include_role:
+    name: kea-stork
+    tasks_from: stork-net
+
+- name: copy exporter environment file
+  ansible.builtin.template:
+    src: kea-db-exporter_env.j2
+    dest: /root/kea-db-exporter_env
+    owner: root
+    group: root
+    mode: 0400
+
+- name: run exporter container
+  community.docker.docker_container:
+    name: kea-db-exporter
+    hostname: kea-db-exporter
+    container_default_behavior: compatibility
+    image: docker/infra-eng/kea-db-exporter:{{ kea_db_exporter_docker_tag }}
+    pull: true
+    restart_policy: on-failure
+    restart_retries: 2
+    network_mode: bridge
+    networks:
+      - name: stork-net
+    memory: 1G
+    published_ports:
+      - "9187:9187/tcp"
+    env_file: /root/kea-db-exporter_env
+    mounts:
+      - source: /dev/log
+        target: /dev/log
+        type: bind
+
+- name: remove exporter container environment file
+  file:
+    path: /root/kea-db-exporter_env
+    state: absent

@@ -1,0 +1,4 @@
+---
+kea_db_admin_password: "{{ lookup('community.hashi_vault.hashi_vault', 'secret=secret/platform/netboot/staging:KEA_DB_ADMIN_PASSWORD cacert={{ vault_ca }} url={{ vault_url }}') }}"
+kea_db_docker_tag: testing
+kea_db_host: kea-db

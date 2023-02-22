@@ -1,0 +1,6 @@
+---
+- name: Create stork-net docker network
+  community.docker.docker_network:
+    name: stork-net
+    ipam_config:
+      - subnet: 192.168.242.0/24

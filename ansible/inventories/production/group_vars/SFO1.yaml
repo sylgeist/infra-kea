@@ -1,0 +1,6 @@
+---
+region: sfo1
+ddns_tsig: "{{ lookup('community.hashi_vault.hashi_vault', 'secret=secret/platform/netboot/production:DDNS_TSIG cacert={{ vault_ca }} url={{ vault_url }}') }}"
+kea_docker_tag: 153c544
+ipxe_docker_tag: 68c6fff
+www_images_docker_tag: 7e4aa74

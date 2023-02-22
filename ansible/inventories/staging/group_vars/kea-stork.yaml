@@ -1,0 +1,4 @@
+---
+kea_stork_db_user_password: "{{ lookup('community.hashi_vault.hashi_vault', 'secret=secret/platform/stork-dhcp/staging:STORK_USER_PASSWORD cacert={{ vault_ca }} url={{ vault_url }}') }}"
+kea_stork_docker_tag: testing
+kea_docker_tag: testing

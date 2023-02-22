@@ -1,0 +1,51 @@
+{
+  "job": {
+    "name": "kea-production-mtls",
+    "namespace": "platform",
+    "deadline": "30m",
+    "schedule": "52 17 1,15 * *",
+    "containers": {
+      "app": {
+        "image": "docker/security/gencert-tall:b17c451",
+        "command": ["/bin/renew-cert.sh"],
+        "env": {
+          "MTLS_DOMAIN": "kea.provisioning.service.digitalocean.com",
+          "MTLS_TTL": "792h",
+          "SECRET_PATH": "secret/platform/netboot/kea-production-mtls"
+        },
+        "secrets": [
+          {
+            "type": "env",
+            "path": "secret/platform/netboot/production",
+            "key": "VAULT_ROLE_ID"
+          },
+          {
+            "type": "env",
+            "path": "secret/platform/netboot/production",
+            "key": "VAULT_SECRET_ID"
+          }
+        ]
+      }
+    },
+    "on_failure": {
+      "notifications": [
+        {
+          "type": "slack",
+          "channel": "#infra-service-builds"
+        }
+      ]
+    },
+    "on_success": {
+      "notifications": [
+        {
+          "type": "slack",
+          "channel": "#infra-service-builds"
+        }
+      ]
+    }
+  },
+  "maintainer": "provisioning-dccore@digitalocean.com",
+  "mtls_acl": {
+    "*.infra-eng.staff.digitalocean.com": ["delete", "read", "write"]
+  }
+}

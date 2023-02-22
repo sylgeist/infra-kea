@@ -1,0 +1,54 @@
+---
+- name: Create stork-net docker network
+  include_role:
+    name: kea-stork
+    tasks_from: stork-net
+
+  # The Postgres container expects this dir to be owned by the PG user
+  # Setting this to 999 avoids an unnecessary task change
+- name: create PG_DATA dir on host
+  ansible.builtin.file:
+    path: /var/lib/kea-db_container/pgdata
+    state: directory
+    owner: "999"
+    group: root
+    mode: 0700
+
+- name: copy db environment file
+  ansible.builtin.template:
+    src: kea-db_env.j2
+    dest: /root/kea-db_env
+    owner: root
+    group: root
+    mode: 0400
+
+- name: run Postgres container
+  community.docker.docker_container:
+    name: kea-db
+    hostname: kea-db
+    container_default_behavior: compatibility
+    image: docker/infra-eng/kea-db:{{ kea_db_docker_tag }}
+    pull: true
+    restart_policy: on-failure
+    restart_retries: 2
+    network_mode: bridge
+    networks:
+      - name: stork-net
+    memory: 16G
+    shm_size: 512MB
+    published_ports:
+      - "5432:5432/tcp"
+    env_file: /root/kea-db_env
+    command: postgres -c 'config_file=/etc/postgresql/postgresql.conf'
+    mounts:
+      - source: /var/lib/kea-db_container/pgdata
+        target: /var/lib/postgresql/data
+        type: bind
+      - source: /dev/log
+        target: /dev/log
+        type: bind
+
+- name: remove Postgres container environment file
+  file:
+    path: /root/kea-db_env
+    state: absent
